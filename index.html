@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>impact monitor — concussion risk dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f7f6f3;
+    --surface: #ffffff;
+    --border: rgba(0,0,0,0.08);
+    --border-strong: rgba(0,0,0,0.14);
+    --text-primary: #1a1a18;
+    --text-secondary: #6b6b67;
+    --text-muted: #9e9e9a;
+    --green: #3B6D11;
+    --green-bg: #EAF3DE;
+    --amber: #854F0B;
+    --amber-bg: #FAEEDA;
+    --red: #A32D2D;
+    --red-bg: #FCEBEB;
+    --blue: #185FA5;
+    --blue-bg: #E6F1FB;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --font: 'DM Sans', sans-serif;
+    --mono: 'DM Mono', monospace;
+  }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text-primary);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* layout */
+  .app { display: flex; flex-direction: column; min-height: 100vh; }
+
+  header {
+    background: var(--surface);
+    border-bottom: 0.5px solid var(--border);
+    padding: 0 2rem;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-mark {
+    width: 28px;
+    height: 28px;
+    background: var(--text-primary);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .logo-mark svg { display: block; }
+
+  .logo-text {
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+
+  .logo-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--mono);
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: var(--bg);
+    border: 0.5px solid var(--border);
+    padding: 4px 10px;
+    border-radius: 99px;
+  }
+
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+  }
+
+  .dot.live { animation: blink 1.8s ease-in-out infinite; }
+  .dot.demo { background: var(--amber); animation: none; }
+
+  @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.25;} }
+
+  .session-info {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-family: var(--mono);
+  }
+
+  main { flex: 1; padding: 2rem; max-width: 1200px; margin: 0 auto; width: 100%; }
+
+  /* summary bar */
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 1.5rem;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--mono);
+    margin-bottom: 4px;
+    text-transform: lowercase;
+  }
+
+  .stat-value {
+    font-size: 22px;
+    font-weight: 300;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+  }
+
+  .stat-value.danger { color: var(--red); }
+  .stat-value.warn { color: var(--amber); }
+
+  /* player grid */
+  .section-label {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--text-muted);
+    margin-bottom: 10px;
+    letter-spacing: 0.04em;
+    text-transform: lowercase;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+    gap: 10px;
+    margin-bottom: 1.5rem;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    cursor: pointer;
+    transition: border-color 0.15s, transform 0.1s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--bar-color, transparent);
+    transition: background 0.4s;
+  }
+
+  .card:hover { border-color: var(--border-strong); transform: translateY(-1px); }
+  .card.selected { border-color: rgba(24,95,165,0.4); border-width: 1px; }
+
+  .avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 0.5px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin: 0 auto 10px;
+    overflow: hidden;
+  }
+
+  .avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+  .card-name {
+    font-size: 13px;
+    font-weight: 500;
+    text-align: center;
+    margin-bottom: 1px;
+    color: var(--text-primary);
+  }
+
+  .card-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+    font-family: var(--mono);
+    margin-bottom: 12px;
+  }
+
+  .risk-label-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    margin-bottom: 5px;
+  }
+
+  .risk-word { font-weight: 500; font-family: var(--mono); }
+
+  .track {
+    width: 100%;
+    height: 4px;
+    background: var(--bg);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+
+  .fill {
+    height: 100%;
+    border-radius: 99px;
+    transition: width 0.6s cubic-bezier(0.4,0,0.2,1), background 0.4s;
+  }
+
+  /* detail panel */
+  .detail {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.35s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  .detail.open { max-height: 600px; }
+
+  .detail-inner {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 0;
+    padding: 1.5rem;
+  }
+
+  .profile-col {
+    padding-right: 1.5rem;
+    border-right: 0.5px solid var(--border);
+  }
+
+  .avatar-lg {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 0.5px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+
+  .avatar-lg img { width: 100%; height: 100%; object-fit: cover; }
+
+  .player-name { font-size: 17px; font-weight: 500; margin-bottom: 2px; letter-spacing: -0.01em; }
+  .player-pos { font-size: 12px; color: var(--text-muted); font-family: var(--mono); margin-bottom: 16px; }
+
+  .bio-table { width: 100%; border-collapse: collapse; }
+  .bio-table td { font-size: 12px; padding: 5px 0; border-bottom: 0.5px solid var(--border); }
+  .bio-table td:first-child { color: var(--text-muted); }
+  .bio-table td:last-child { text-align: right; font-weight: 500; }
+
+  .load-section { margin-top: 16px; }
+  .load-num { font-size: 28px; font-weight: 300; letter-spacing: -0.03em; }
+  .load-denom { font-size: 13px; color: var(--text-muted); font-family: var(--mono); }
+
+  .stats-col { padding-left: 1.5rem; overflow-y: auto; max-height: 500px; }
+
+  .col-heading {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    text-transform: lowercase;
+  }
+
+  .hit-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 20px; }
+
+  .hit-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    font-size: 12px;
+  }
+
+  .hit-row.danger { background: var(--red-bg); }
+  .hit-row.warning { background: var(--amber-bg); }
+
+  .hit-g { font-weight: 500; font-family: var(--mono); }
+  .hit-g.danger { color: var(--red); }
+  .hit-g.warning { color: var(--amber); }
+  .hit-time { color: var(--text-muted); font-family: var(--mono); font-size: 11px; }
+
+  .prev-list { display: flex; flex-direction: column; gap: 0; }
+
+  .prev-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 0.5px solid var(--border);
+    font-size: 12px;
+  }
+
+  .prev-date { color: var(--text-secondary); font-family: var(--mono); }
+  .prev-right { display: flex; align-items: center; gap: 8px; }
+  .prev-g { font-weight: 500; font-family: var(--mono); }
+
+  .badge {
+    font-size: 10px;
+    font-family: var(--mono);
+    padding: 2px 7px;
+    border-radius: 99px;
+    font-weight: 500;
+  }
+
+  .badge.safe { background: var(--green-bg); color: var(--green); }
+  .badge.warn { background: var(--amber-bg); color: var(--amber); }
+  .badge.danger { background: var(--red-bg); color: var(--red); }
+
+  .empty-hits {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-family: var(--mono);
+    padding: 8px 0;
+  }
+
+  /* ros connection banner */
+  .ros-banner {
+    background: var(--blue-bg);
+    border: 0.5px solid rgba(24,95,165,0.2);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--blue);
+    font-family: var(--mono);
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .ros-banner.hidden { display: none; }
+
+  /* responsive */
+  @media (max-width: 600px) {
+    main { padding: 1rem; }
+    .summary { grid-template-columns: repeat(2, 1fr); }
+    .detail-inner { grid-template-columns: 1fr; }
+    .profile-col { border-right: none; border-bottom: 0.5px solid var(--border); padding-right: 0; padding-bottom: 1rem; margin-bottom: 1rem; }
+    .stats-col { padding-left: 0; }
+  }
+
+  @media (max-width: 400px) {
+    header { padding: 0 1rem; }
+    .session-info { display: none; }
+  }
+
+  /* stagger load animation */
+  .card { opacity: 0; animation: fadeUp 0.3s ease forwards; }
+  @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+  .card:nth-child(1){animation-delay:0.05s}
+  .card:nth-child(2){animation-delay:0.10s}
+  .card:nth-child(3){animation-delay:0.15s}
+  .card:nth-child(4){animation-delay:0.20s}
+  .card:nth-child(5){animation-delay:0.25s}
+  .card:nth-child(6){animation-delay:0.30s}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div class="logo">
+      <div class="logo-mark">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <circle cx="8" cy="8" r="5" stroke="white" stroke-width="1.5"/>
+          <path d="M8 5v3l2 1.5" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div>
+        <div class="logo-text">impact monitor</div>
+        <div class="logo-sub">concussion risk system</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="session-info" id="session-time">session — demo mode</div>
+      <div class="status-pill">
+        <div class="dot demo" id="status-dot"></div>
+        <span id="status-text">demo</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+
+    <div class="ros-banner" id="ros-banner">
+      <span>connect to local ROS bridge: <strong>ws://localhost:9090</strong> to stream live data</span>
+      <span id="ros-status">not connected</span>
+    </div>
+
+    <div class="summary" id="summary"></div>
+
+    <div class="section-label">players — click to view profile</div>
+    <div class="grid" id="grid"></div>
+    <div class="detail" id="detail">
+      <div class="detail-inner">
+        <div class="profile-col" id="profile-col"></div>
+        <div class="stats-col" id="stats-col"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+const MAX_G = 300;
+const DANGER_G = 80;
+
+const players = [
+  { id:1, name:"Marcus Webb", initials:"MW", number:"#12", pos:"midfielder", dob:"Mar 4, 2001", height:"6'1\"", weight:"185 lb", hits:[{g:23.1,t:"09:14"},{g:91.4,t:"09:31"},{g:41.2,t:"10:05"},{g:87.3,t:"10:22"}], cumulative:243, prev:[{game:"Mar 15",total:188,flag:"safe"},{game:"Mar 8",total:312,flag:"danger"},{game:"Mar 1",total:97,flag:"safe"}] },
+  { id:2, name:"Jordan Kim", initials:"JK", number:"#7", pos:"forward", dob:"Jul 19, 2000", height:"5'10\"", weight:"172 lb", hits:[{g:12.4,t:"09:22"},{g:34.1,t:"09:55"}], cumulative:46, prev:[{game:"Mar 15",total:201,flag:"warn"},{game:"Mar 8",total:88,flag:"safe"},{game:"Mar 1",total:145,flag:"safe"}] },
+  { id:3, name:"Sam Okafor", initials:"SO", number:"#21", pos:"defender", dob:"Nov 30, 1999", height:"6'3\"", weight:"210 lb", hits:[{g:88.2,t:"09:10"},{g:92.1,t:"09:45"},{g:76.3,t:"10:12"},{g:81.0,t:"10:33"},{g:44.2,t:"10:51"}], cumulative:382, prev:[{game:"Mar 15",total:290,flag:"warn"},{game:"Mar 8",total:334,flag:"danger"},{game:"Mar 1",total:178,flag:"safe"}] },
+  { id:4, name:"Riley Torres", initials:"RT", number:"#3", pos:"midfielder", dob:"Feb 14, 2002", height:"5'9\"", weight:"165 lb", hits:[{g:18.3,t:"10:02"}], cumulative:18, prev:[{game:"Mar 15",total:55,flag:"safe"},{game:"Mar 8",total:102,flag:"safe"},{game:"Mar 1",total:78,flag:"safe"}] },
+  { id:5, name:"Alex Chen", initials:"AC", number:"#9", pos:"forward", dob:"Sep 8, 2001", height:"5'11\"", weight:"178 lb", hits:[{g:61.2,t:"09:38"},{g:44.0,t:"10:14"},{g:83.5,t:"10:44"}], cumulative:189, prev:[{game:"Mar 15",total:167,flag:"safe"},{game:"Mar 8",total:245,flag:"warn"},{game:"Mar 1",total:201,flag:"warn"}] },
+  { id:6, name:"Devon Park", initials:"DP", number:"#15", pos:"defender", dob:"Jun 22, 2000", height:"6'0\"", weight:"192 lb", hits:[], cumulative:0, prev:[{game:"Mar 15",total:44,flag:"safe"},{game:"Mar 8",total:133,flag:"safe"},{game:"Mar 1",total:89,flag:"safe"}] },
+];
+
+let selected = null;
+
+function riskColor(pct) {
+  if (pct < 0.5) return "#3B6D11";
+  if (pct < 0.85) return "#BA7517";
+  return "#A32D2D";
+}
+
+function riskWord(pct) {
+  if (pct < 0.5) return "low";
+  if (pct < 0.85) return "moderate";
+  return "high";
+}
+
+function hitClass(g) {
+  if (g >= DANGER_G) return "danger";
+  if (g >= 60) return "warning";
+  return "";
+}
+
+function renderSummary() {
+  const danger = players.filter(p => p.cumulative >= MAX_G).length;
+  const warn = players.filter(p => p.cumulative >= MAX_G * 0.5 && p.cumulative < MAX_G).length;
+  const totalHits = players.reduce((a,p) => a + p.hits.filter(h => h.g >= DANGER_G).length, 0);
+  const highest = Math.max(...players.map(p => p.cumulative));
+
+  document.getElementById("summary").innerHTML = `
+    <div class="stat-card"><div class="stat-label">players</div><div class="stat-value">${players.length}</div></div>
+    <div class="stat-card"><div class="stat-label">danger zone</div><div class="stat-value danger">${danger}</div></div>
+    <div class="stat-card"><div class="stat-label">at risk</div><div class="stat-value warn">${warn}</div></div>
+    <div class="stat-card"><div class="stat-label">hard impacts</div><div class="stat-value">${totalHits}</div></div>
+  `;
+}
+
+function renderGrid() {
+  document.getElementById("grid").innerHTML = players.map(p => {
+    const pct = Math.min(p.cumulative / MAX_G, 1);
+    const color = riskColor(pct);
+    const pctW = Math.round(pct * 100);
+    return `<div class="card${selected===p.id?" selected":""}" style="--bar-color:${color}" onclick="selectPlayer(${p.id})">
+      <div class="avatar">${p.initials}</div>
+      <div class="card-name">${p.name}</div>
+      <div class="card-meta">${p.number} · ${p.pos}</div>
+      <div class="risk-label-row">
+        <span style="color:var(--text-muted)">load</span>
+        <span class="risk-word" style="color:${color}">${riskWord(pct)}</span>
+      </div>
+      <div class="track"><div class="fill" style="width:${pctW}%;background:${color}"></div></div>
+    </div>`;
+  }).join("");
+}
+
+function selectPlayer(id) {
+  if (selected === id) {
+    selected = null;
+    document.getElementById("detail").classList.remove("open");
+    renderGrid();
+    return;
+  }
+  selected = id;
+  renderGrid();
+
+  const p = players.find(x => x.id === id);
+  const pct = Math.min(p.cumulative / MAX_G, 1);
+  const color = riskColor(pct);
+
+  document.getElementById("profile-col").innerHTML = `
+    <div class="avatar-lg">${p.initials}</div>
+    <div class="player-name">${p.name}</div>
+    <div class="player-pos">${p.pos} · ${p.number}</div>
+    <table class="bio-table">
+      <tr><td>date of birth</td><td>${p.dob}</td></tr>
+      <tr><td>height</td><td>${p.height}</td></tr>
+      <tr><td>weight</td><td>${p.weight}</td></tr>
+      <tr><td>hits today</td><td>${p.hits.length}</td></tr>
+      <tr><td>hard impacts</td><td style="color:${p.hits.filter(h=>h.g>=DANGER_G).length>0?'var(--red)':'inherit'}">${p.hits.filter(h=>h.g>=DANGER_G).length}</td></tr>
+    </table>
+    <div class="load-section">
+      <div style="font-size:11px;font-family:var(--mono);color:var(--text-muted);margin-bottom:4px;">session load</div>
+      <div style="display:flex;align-items:baseline;gap:6px;">
+        <span class="load-num" style="color:${color}">${p.cumulative}</span>
+        <span class="load-denom">/ ${MAX_G}g</span>
+      </div>
+      <div class="track" style="margin-top:8px;height:5px;">
+        <div class="fill" style="width:${Math.round(pct*100)}%;background:${color}"></div>
+      </div>
+    </div>
+  `;
+
+  const hitRows = p.hits.length > 0
+    ? p.hits.map(h => {
+        const cls = hitClass(h.g);
+        return `<div class="hit-row ${cls}">
+          <span class="hit-g ${cls}">${h.g.toFixed(1)}g</span>
+          <span class="hit-time">${h.t}</span>
+        </div>`;
+      }).join("")
+    : `<div class="empty-hits">no hits recorded this session</div>`;
+
+  const prevRows = p.prev.map(g => `
+    <div class="prev-row">
+      <span class="prev-date">${g.game}</span>
+      <div class="prev-right">
+        <span class="prev-g">${g.total}g</span>
+        <span class="badge ${g.flag}">${g.flag}</span>
+      </div>
+    </div>`).join("");
+
+  document.getElementById("stats-col").innerHTML = `
+    <div class="col-heading">this session — ${p.hits.length} impact${p.hits.length!==1?"s":""}</div>
+    <div class="hit-list">${hitRows}</div>
+    <div class="col-heading">previous sessions</div>
+    <div class="prev-list">${prevRows}</div>
+  `;
+
+  document.getElementById("detail").classList.add("open");
+}
+
+// rosbridge websocket — activates automatically if running locally
+function tryRosBridge() {
+  try {
+    const ws = new WebSocket("ws://localhost:9090");
+    ws.onopen = () => {
+      document.getElementById("ros-banner").classList.add("hidden");
+      document.getElementById("status-dot").classList.remove("demo");
+      document.getElementById("status-dot").classList.add("live");
+      document.getElementById("status-text").textContent = "live";
+      document.getElementById("session-time").textContent = "session — live";
+
+      ws.send(JSON.stringify({
+        op: "subscribe",
+        topic: "/alerts",
+        type: "std_msgs/String"
+      }));
+
+      ws.send(JSON.stringify({
+        op: "subscribe",
+        topic: "/head_impact",
+        type: "std_msgs/Float32"
+      }));
+    };
+
+    ws.onmessage = (evt) => {
+      const msg = JSON.parse(evt.data);
+      if (msg.topic === "/head_impact" && msg.msg) {
+        const g = msg.msg.data;
+        // in a real multi-player setup, route by player id from the message
+        // for now, stream to player 1 as demo
+        const p = players[0];
+        p.cumulative = parseFloat((p.cumulative + g).toFixed(1));
+        if (g >= DANGER_G) {
+          const now = new Date();
+          const t = now.getHours().toString().padStart(2,"0") + ":" + now.getMinutes().toString().padStart(2,"0");
+          p.hits.push({ g: parseFloat(g.toFixed(1)), t });
+        }
+        renderGrid();
+        renderSummary();
+        if (selected === p.id) selectPlayer(p.id);
+      }
+    };
+
+    ws.onerror = () => {
+      document.getElementById("ros-status").textContent = "not connected";
+    };
+
+    ws.onclose = () => {
+      document.getElementById("status-dot").classList.add("demo");
+      document.getElementById("status-dot").classList.remove("live");
+      document.getElementById("status-text").textContent = "demo";
+      document.getElementById("ros-banner").classList.remove("hidden");
+    };
+  } catch(e) {}
+}
+
+// update session clock
+function updateClock() {
+  const now = new Date();
+  const t = now.toLocaleTimeString("en-CA", { hour:"2-digit", minute:"2-digit" });
+  const el = document.getElementById("session-time");
+  if (el.textContent.includes("demo")) {
+    el.textContent = "session — demo mode";
+  }
+}
+
+renderSummary();
+renderGrid();
+setInterval(updateClock, 10000);
+tryRosBridge();
+</script>
+</body>
+</html>
